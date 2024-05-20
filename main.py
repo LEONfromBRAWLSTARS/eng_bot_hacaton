@@ -1,19 +1,19 @@
 from telebot import TeleBot
 from telebot.types import Message, CallbackQuery, BotCommand
-from project.config import BOT_TOKEN, SYSTEM_PROMPT, SYSTEM_PROMPT_TRANSLATION
+from config import BOT_TOKEN, SYSTEM_PROMPT, SYSTEM_PROMPT_TRANSLATION
 
 from validation import (is_user_amount_limit, is_gpt_tokens_limit_per_message)
-from project.database import (create_table_tests, add_user_to_tests_table, get_tests_info, is_user_in_tests, add_level_info, create_table_prompts, create_table_limits, user_in_table,
+from database import (create_table_tests, add_user_to_tests_table, get_tests_info, is_user_in_tests, add_level_info, create_table_prompts, create_table_limits, user_in_table,
                               insert_row_into_limits, update_tts_tokens_in_limits, insert_row_into_prompts,
                               update_stt_blocks_in_limits, update_gpt_tokens_in_limits, get_last_session,
                               update_session_id, get_start_dialog, get_theme_dialog, update_start_dialog, update_theme_dialog,
                               update_message_translation, get_last_message_and_translation)
 import logging
 from math import ceil
-from project.keyboards import menu_keyboard, inline_menu_keyboard
-from project.info import topics
+from keyboards import menu_keyboard, inline_menu_keyboard
+from info import topics
 from utils import get_markdownv2_text
-from project.dialog_pipeline import stt, ttt, tts
+from dialog_pipeline import stt, ttt, tts
 import random
 import json
 from vocab import get_info_of_word
@@ -32,7 +32,7 @@ def translate(message: Message):
     definition, example, audio = get_info_of_word(message.text)
     bot.send_message(user_id, definition)
     bot.send_message(user_id, example)
-    bot.send_audio(user_id, audio)
+    bot.send_voice(user_id, audio)
 
 
 @bot.message_handler(commands=['start'])

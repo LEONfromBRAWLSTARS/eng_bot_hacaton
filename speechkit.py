@@ -1,6 +1,6 @@
 import requests
 
-from project.config import TTS, STT_ENG, STT_RU
+from config import TTS, STT_ENG, STT_RU
 
 
 def text_to_speech(text):

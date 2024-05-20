@@ -1,10 +1,10 @@
-from project.database import all_users, user_in_table, get_tts_tokens, get_stt_blocks, get_gpt_tokens
+from database import all_users, user_in_table, get_tts_tokens, get_stt_blocks, get_gpt_tokens
 
-from project.config import (MAX_USERS, MAX_TTS_TOKENS_PER_PERSON, MAX_TTS_TOKENS_PER_MESSAGE, MAX_STT_BLOCKS_PER_PERSON,
+from config import (MAX_USERS, MAX_TTS_TOKENS_PER_PERSON, MAX_TTS_TOKENS_PER_MESSAGE, MAX_STT_BLOCKS_PER_PERSON,
 
                             MAX_GPT_TOKENS_PER_PERSON, MAX_GPT_TOKENS_PER_MESSAGE)
 
-from project.gpt import gpt_tokenizer
+from gpt import gpt_tokenizer
 
 
 # Проверяем, что количество пользователей в пределе

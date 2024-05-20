@@ -1,7 +1,7 @@
 import requests
 import time
 import logging
-from project.config import TOKENIZER, GPT, IEM_TOKEN_INFO, IEM
+from config import TOKENIZER, GPT, IEM_TOKEN_INFO, IEM
 
 logger = logging.getLogger('__main__')
 

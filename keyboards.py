@@ -1,4 +1,3 @@
-import telebot.apihelper
 from telebot import types
 
 
