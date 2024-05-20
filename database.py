@@ -26,6 +26,13 @@ def get_cursor():
     return connection.cursor(), connection
 
 
+# Создаем таблицу с пользователем и тестами
+# В колонки тестов мы передаем строку с ключевыми параметрами, разделенными запятой. Параметры по порядку: state,
+# num_of_question, amount_of_correct_answers, message_id.
+# state - в каком состоянии находится пользователь по тесту(None - не начинал тест вообще, Start - начал его и проходит,
+# Finished - завершил тест), num_of_question - номер вопроса, который проходит пользователь,
+# amount_of_correct_answers - количество правильных ответов в тесте, message_id - id сообщения с тестом.
+# Выставляем значения по умолчанию для уровней тестов.
 def create_table_tests():
     query = f'''
     CREATE TABLE IF NOT EXISTS {TESTS_TABLE}
@@ -42,6 +49,7 @@ def create_table_tests():
     execute_query(query)
 
 
+# Проверяем, есть ли пользователь в таблице тестов
 def is_user_in_tests(user_id):
     query = f'''
         SELECT EXISTS(SELECT 1 FROM {TESTS_TABLE} WHERE user_id = {user_id});
@@ -51,6 +59,7 @@ def is_user_in_tests(user_id):
     return result[0][0]
 
 
+# Извлекаем информацию о тесте
 def get_tests_info(user_id, level):
     query = f'''
     SELECT {level} FROM {TESTS_TABLE}
@@ -59,6 +68,7 @@ def get_tests_info(user_id, level):
     return result[0][0]
 
 
+# Добавляем просто айди пользователя в таблицу тестов. По дефолту там уже стоят значения на уровнях теста
 def add_user_to_tests_table(user_id):
     query = f'''
     INSERT INTO {TESTS_TABLE}
@@ -68,6 +78,7 @@ def add_user_to_tests_table(user_id):
     execute_query(query, (user_id, ))
 
 
+# Добавляем инфу по определенному тесту, на котором сейчас пользователь
 def add_level_info(user_id, level, info):
     print(user_id, level, info)
     query = f'''
@@ -225,6 +236,7 @@ def user_in_table(user_id):
     return result[0][0]
 
 
+# Получаем номер последней сессию общения в диалоге
 def get_last_session(user_id):
     query = f'''
     SELECT session_id FROM {LIMITS_TABLE} WHERE user_id = {user_id};'''
@@ -232,6 +244,7 @@ def get_last_session(user_id):
     return 0 if not result else result[0][0]
 
 
+# Обновляем сессию в диалоге
 def update_session_id(user_id, value):
     query = f'''
     UPDATE {LIMITS_TABLE}
@@ -241,6 +254,7 @@ def update_session_id(user_id, value):
     execute_query(query)
 
 
+# Проверяем, начал ли пользователь диалог
 def get_start_dialog(user_id):
     query = f'''
     SELECT start FROM {LIMITS_TABLE} WHERE user_id = {user_id};
@@ -250,6 +264,7 @@ def get_start_dialog(user_id):
     return result[0][0]
 
 
+# Получаем тему диалога
 def get_theme_dialog(user_id):
     query = f'''
     SELECT theme FROM {LIMITS_TABLE} WHERE user_id = {user_id};
@@ -258,6 +273,7 @@ def get_theme_dialog(user_id):
     return result[0][0]
 
 
+# Устанавливаем в каком состоянии находится пользователь в диалоге(общается ли он с ботом или нет)
 def update_start_dialog(user_id, value):
     query = f'''
     UPDATE {LIMITS_TABLE}
@@ -267,6 +283,7 @@ def update_start_dialog(user_id, value):
     execute_query(query)
 
 
+# Обновляем тему диалога
 def update_theme_dialog(user_id, value):
     query = f'''
     UPDATE {LIMITS_TABLE}
@@ -276,6 +293,7 @@ def update_theme_dialog(user_id, value):
     execute_query(query)
 
 
+# Записываем перевод сообщения в диалоге
 def update_message_translation(user_id, translation):
     query = f'''
     UPDATE {PROMPTS_TABLE}
@@ -288,6 +306,7 @@ def update_message_translation(user_id, translation):
     execute_query(query)
 
 
+# Получаем последнее сообщение из диалога и его перевод(если он есть)
 def get_last_message_and_translation(user_id):
     query = f'''
     SELECT message, translation FROM {PROMPTS_TABLE}
@@ -299,6 +318,7 @@ def get_last_message_and_translation(user_id):
     return result[0]
 
 
+# Это все для тестов. В продакшн это не идет
 con = sqlite3.connect(DB_DAME)
 cur = con.cursor()
 cur.execute('DROP TABLE IF EXISTS prompts;')

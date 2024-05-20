@@ -38,13 +38,6 @@ def translate(message: Message):
 @bot.message_handler(commands=['start'])
 def start(message: Message):
     user_id = message.from_user.id
-    #bot.send_message(user_id, f'<b><i> jfkdf </i></b>', parse_mode='HTML')
-    #a = requests.get('https://api.dictionaryapi.dev/api/v2/entries/en/Get DoWn')
-    #print(a.text)
-    #b = requests.get('https://dictionary.yandex.net/api/v1/dicservice.json/lookup?key=dict.1.1.20240515T133831Z.58b53730f3d829fe.05407e0a86e9f254c8806804406bce295ff4358a&lang=en-ru&text= Get  DoWn ')
-    #print(b.text)
-    # Проверяем, достигли ли мы лимита пользователей
-
 
     # Проверяем, есть ли пользователь в нашей таблице лимитов токенов, если нет - добавляем.
     if not user_in_table(user_id):
@@ -81,60 +74,81 @@ def stop_dialog(message: Message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call: CallbackQuery):
     user_id = call.message.chat.id
-
+    # мы нажимаем кнопку Тесты
     if call.data == 'tests':
         if not is_user_in_tests(user_id):
             add_user_to_tests_table(user_id)
-
-        markup = inline_menu_keyboard([['Тесты', 'Null'], ['Диалог', 'Null'], ['Вокабуляр', 'Null']], rows=3)
-        bot.edit_message_reply_markup(user_id, call.message.message_id, reply_markup=markup)
+        # не обращайте внимание на 2 строки внизу
+        # markup = inline_menu_keyboard([['Тесты', 'Null'], ['Диалог', 'Null'], ['Вокабуляр', 'Null']], rows=3)
+        # bot.edit_message_reply_markup(user_id, call.message.message_id, reply_markup=markup)
         markup = inline_menu_keyboard([['A1', 'A1'], ['A2', 'A2'], ['B1', 'B1'],
                                        ['B2', 'B2'], ['C1', 'C1'], ['C2', 'C2']], rows=2)
         bot.send_message(user_id, ('Внизу представлены тесты различных уровней, '
                                    'выберите подходящий и вперед!'), reply_markup=markup)
-
+    # мы выбираем уровень тестов
     elif call.data in ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']:
+        # если айди пользователя еще не записалось в базу данных, то мы записываем
         if not is_user_in_tests(user_id):
             add_user_to_tests_table(user_id)
         if call.data in ['C1', 'C2']:
             bot.send_message(user_id, 'В разработке. Недоступны C1, C2')
             return
-        chosen_level = call.data
-        tests_of_level = tests_dict[chosen_level]
+
+        chosen_level = call.data  # выбранный пользователем уровень (A1, A2, B1 ...)
+        tests_of_level = tests_dict[chosen_level]  # мы извлекаем тесты из json файла для соответствующего уровня
+        # мы берем инфу: state - в каком состоянии находится пользователь по тесту(None - не начинал тест вообще,
+        # Start - начал его и проходит, Finished - завершил тест), num_of_question - номер вопроса,
+        # который проходит пользователь, amount_of_correct_answers - количество правильных ответов в тесте, message_id -
+        # нужен будет в будущем, чтобы избежать всевозможных багов, связанных с кнопками.
         state, num_of_question, amount_of_correct_answers, message_id = get_tests_info(user_id, chosen_level).split(', ')
-        amount_of_questions = len(tests_of_level)
-        if int(num_of_question) > amount_of_questions:
+        amount_of_questions = len(tests_of_level)  # количество вопросов в тесте
+
+        # если пользователь тест уже прошел и нажал на него еще раз, то мы ему говорим об этом.
+        if state == 'Finished':
             markup = inline_menu_keyboard([['Пройти еще раз', 'test_start_over'],
                                            ['Выйти', 'exit']], rows=1)
             bot.send_message(chat_id=user_id,
-                             text=f'{chosen_level} уровень. Вы уже прошли данное тестирование, хотите пройти его еще раз?', reply_markup=markup)
-            #state = 'Finished'
-            #num_of_question = 1
-            #amount_of_correct_answers = 0
-            #message_id = 'None'
-            #add_level_info(user_id, chosen_level, f'{state}, {num_of_question}, {amount_of_correct_answers}, {message_id}')
+                             text=(f'{chosen_level} уровень. Вы уже прошли данное тестирование, '
+                                   f'хотите пройти его еще раз?'), reply_markup=markup)
             return
+        # если пользователь проходил тест, не завершил его и бросил, а потом нажал на него еще раз, то мы предлагаем ему
+        # либо продолжить тест, либо начать заново
         if state == "Start":
+            # мы удаляем старое сообщение с тестом для избежания багов и поддержания чистоты, как раз тут message_id
+            # используется. Message_id - id старого сообщения с тестом, который мы удаляем
             bot.delete_message(chat_id=user_id, message_id=message_id)
             markup = inline_menu_keyboard([['Продолжить тестирование', 'test_continue'],
                                            ['Начать сначала', 'test_start_over']], rows=1)
             bot.send_message(user_id, (f'{chosen_level} уровень. У вас есть незавершенное тестирование\n'
                                        f'Хотите продолжить?'), reply_markup=markup)
+        # если пользователь проходит тест в данный момент в штатном режиме
         else:
+            # Получаем вопрос из нашего json
             question = tests_of_level[num_of_question]["question"]
+            # Создаем клавиатуру с опциями для ответа
             markup = inline_menu_keyboard(tests_of_level[num_of_question]["options"].items(), rows=2)
             message = bot.send_message(user_id, (f'{call.data}. Вопрос {int(num_of_question)}/{amount_of_questions}\n\n'
                                        f'{question}'), reply_markup=markup)
+            # Обновляем информацию о пользователе в таблице тестов.
+            # Стоить заметить, что мы передаем строку в таблицу, ключевые элементы которой разделены через запятую.
+            # Элементы (state, num_of_question, amount_of_correct_answers, message_id). Я их расписал вверху
             add_level_info(user_id, chosen_level,
                            f'Start, {num_of_question}, {amount_of_correct_answers}, {message.message_id}')
 
+    # обработчик кнопок "Продолжить тестирование", "Начать сначала", "Выход"
     elif call.data in ['test_continue', 'test_start_over', 'exit']:
+        # Получаем уровень теста, на котором сейчас пользователь(я сделал это не очень красиво, так как я беру уровень
+        # из текста сообщения(первые два знака), в таком случае при изменении текста с кнопками
+        # "Продолжить тестирование", "Начать сначала", "Выход" нам нужно будет всегда обязательно указывать в сообщении
+        # уровень теста (А1, А2 ...) и также надо смотреть, где мы этот уровень написали, чтобы потом срезом строки
+        # вынуть уровень)
         level = call.message.text[:2]
+        # Если нажали кнопку "Выход". (Мы удаляем сообщение, чтобы глаза не маячило и, опять же, избежать багов)
         if call.data == 'exit':
             bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        # Если нажали кнопку "Продолжить тестирование". (Мы берем инфу из БД и продолжаем тест с того же места)
         if call.data == 'test_continue':
-            state, num_of_question, amount_of_correct_answers, message_id = get_tests_info(user_id, level).split(', ')
-
+            # Информация по переменным указана в 'if call.data in ['A1', 'A2'...' вверху. (Можете через ctrl + F найти)
             tests_of_level = tests_dict[level]
             state, num_of_question, amount_of_correct_answers, message_id = get_tests_info(user_id, level).split(', ')
             amount_of_questions = len(tests_of_level)
@@ -143,53 +157,62 @@ def callback_handler(call: CallbackQuery):
             add_level_info(user_id, level,
                            f'Start, {num_of_question}, {amount_of_correct_answers}, {call.message.id}')
             markup = inline_menu_keyboard(tests_of_level[num_of_question]["options"].items(), rows=2)
-            bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id, text=(f'{level}. Вопрос {int(num_of_question)}/{amount_of_questions}\n\n'
-                                       f'{question}'), reply_markup=markup)
-
+            bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id,
+                                  text=(f'{level}. Вопрос {int(num_of_question)}/{amount_of_questions}\n\n'
+                                        f'{question}'), reply_markup=markup)
+        # Если пользователь нажал "Начать сначала". (Мы обновляем всю его информацию по этому тесту и начинаем сначала)
         elif call.data == 'test_start_over':
+            # Обновляем всю информацию по тесту
             state = 'Start'
-            num_of_question = 1
+            num_of_question = '1'
             amount_of_correct_answers = 0
             message_id = call.message.message_id
-            add_level_info(user_id, level, f'{state}, {num_of_question}, {amount_of_correct_answers}, {message_id}')
-            state, num_of_question, amount_of_correct_answers, message_id = get_tests_info(user_id, level).split(', ')
+            # Извлекаем вопрос из json
             tests_of_level = tests_dict[level]
             amount_of_questions = len(tests_of_level)
             question = tests_of_level[num_of_question]["question"]
-            markup = inline_menu_keyboard(tests_of_level[num_of_question]["options"].items(), rows=2)
-            bot.edit_message_text(chat_id=user_id, message_id=message_id, text=(f'{level}. Вопрос {int(num_of_question)}/{amount_of_questions}\n\n'
-                                       f'{question}'), reply_markup=markup)
 
+            markup = inline_menu_keyboard(tests_of_level[num_of_question]["options"].items(), rows=2)
+            bot.edit_message_text(chat_id=user_id, message_id=message_id,
+                                  text=(f'{level}. Вопрос {num_of_question}/{amount_of_questions}\n\n'
+                                        f'{question}'), reply_markup=markup)
+            add_level_info(user_id, level, f'{state}, {num_of_question}, {amount_of_correct_answers}, {message_id}')
+    # Используется, когда пользователь нажимает кнопки ответов на вопросы теста
     elif call.data in ['1', '2', '3', '4']:
         if not is_user_in_tests(user_id):
             bot.send_message(user_id, 'запустите тест заново')
             return
+        # Опять берем уровень теста
         level = call.message.text[:2]
 
         tests_of_level = tests_dict[level]
         state, num_of_question, amount_of_correct_answers, message_id = get_tests_info(user_id, level).split(', ')
         amount_of_questions = len(tests_of_level)
-        message_id = call.message.id #maybe delete
-
+        message_id = call.message.id  # maybe useless
+        # Смотрим выбранный пользователем ответ и правильный ответ, а потом еще и сравниваем их
         chosen_answer = call.data
         correct_answer = tests_of_level[num_of_question]['correct_answer']
+
         if chosen_answer == correct_answer:
             amount_of_correct_answers = int(amount_of_correct_answers) + 1
+        # Если номер отвеченного вопроса пользователя сравнялся с количеством вопросов в тесте, то мы его заканчиваем
         if int(num_of_question) == amount_of_questions:
 
             bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id,
                                   text=(f'В тесте уровня {level} ваш результат {amount_of_correct_answers} '
                                         f'правильных ответов из {amount_of_questions}\n\n'
                                         f'СУПЕР ГУД, {call.from_user.first_name}.'))
+            # Добавляем инфу о том, что тест завершен
             add_level_info(user_id, level, f'Finished, {int(num_of_question)+1}, {amount_of_correct_answers}, {"None"}')
             return
+        # Иначе, если тест у нас идет в штатном режиме и пользователь только проходит его
         add_level_info(user_id, level, f'Start, {int(num_of_question)+1}, {amount_of_correct_answers}, {message_id}')
         question = tests_of_level[str(int(num_of_question) + 1)]["question"]
         markup = inline_menu_keyboard(tests_of_level[str(int(num_of_question) + 1)]["options"].items(), rows=2)
         bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id,
                               text=(f'{level}. Вопрос {int(num_of_question) + 1}/{amount_of_questions}\n\n'
                                     f'{question}'), reply_markup=markup)
-
+    # Дальше идет код для кнопочек диалога
     elif call.data == 'dialog':
 
         if not is_user_amount_limit(user_id):
@@ -205,10 +228,11 @@ def callback_handler(call: CallbackQuery):
         markup = inline_menu_keyboard([['Задай ты', 'dialog_bot'], ['Я задам', 'dialog_user']], rows=3)
         bot.send_message(user_id, 'Хотите, чтобы я задал тему беседы или же вы зададите ее сами?', reply_markup=markup)
 
+    # Кнопки для того, чтобы решить, кто будет иницатором беседы
     elif call.data in ['dialog_bot', 'dialog_user']:
         markup = inline_menu_keyboard([['Задай ты', 'Null'], ['Я задам', 'Null']], rows=3)
         bot.edit_message_reply_markup(user_id, call.message.message_id, reply_markup=markup)
-
+        # Если бот начинает беседу, то мы берем рандомную тему из списка тем topics из модуля info
         if call.data == 'dialog_bot':
             update_theme_dialog(user_id, 'bot')
             initial_text = random.choice(topics)
@@ -221,6 +245,7 @@ def callback_handler(call: CallbackQuery):
 
         status, output = tts(user_id, initial_text)
 
+        # Если у нас все супер и мы можем дать пользователю ответ
         if status == 'SUCCESS':
             update_tts_tokens_in_limits(user_id, len(initial_text))
 
@@ -230,7 +255,7 @@ def callback_handler(call: CallbackQuery):
             bot.send_voice(user_id, output)
             text = get_markdownv2_text(initial_text)
             bot.send_message(user_id, f'"""||{text}||"""', parse_mode='MarkdownV2', reply_markup=markup)
-
+        # Если пользователь уперся в лимит токенов
         elif status == 'LIMITS':
             markup = menu_keyboard(['✍ Перевести на русский'])
             bot.send_message(output)
@@ -238,7 +263,7 @@ def callback_handler(call: CallbackQuery):
             text = get_markdownv2_text(initial_text)
             bot.send_message(user_id, f'"""||{text}||"""', parse_mode='MarkdownV2', reply_markup=markup)
             return
-
+        # Если мы получили ошибку с нейронкой
         elif status == 'IEM_ERROR':
             bot.send_message(output)
             return
@@ -246,6 +271,7 @@ def callback_handler(call: CallbackQuery):
         update_session_id(user_id, last_session_id+1)
 
 
+# Сюда отправляется весь текст и голосовые сообщения
 @bot.message_handler(content_types=['voice', 'text'])
 def chatting(message: Message):
     user_id = message.from_user.id
@@ -257,7 +283,7 @@ def chatting(message: Message):
     if get_theme_dialog(user_id) == 'False':
         bot.send_message(user_id, 'Вы не выбрали тему диалог, пожалуйста, выберите.')
         return
-
+    # Если пользователь ввел текст Перевести на русский
     if message.text == '✍ Перевести на русский':
         original_message, translated_message = get_last_message_and_translation(user_id)
         if translated_message:
@@ -266,13 +292,14 @@ def chatting(message: Message):
         session_id = get_last_session(user_id)
         is_limit, tokens = is_gpt_tokens_limit_per_message(original_message, SYSTEM_PROMPT_TRANSLATION)
         status, translation = ttt(user_id, original_message, session_id, is_limit, 'translation')
-
+        # Если все супер и мы получили сообщение от нейронки
         if status == 'SUCCESS':
             update_gpt_tokens_in_limits(user_id, tokens)
             session_id = get_last_session(user_id)
             bot.send_message(user_id, translation)
             update_message_translation(user_id, translation)
             return
+        # Если выскочила ошибка какая либо
         elif status in ['IEM_ERROR', 'LIMIT', 'TTT_ERROR']:
             bot.send_message(user_id, translation)
             return
@@ -287,13 +314,13 @@ def chatting(message: Message):
         bot.send_message(user_id, 'Нажмите для начала /start, для регистрации.')
         logging.warning(f'User_id {user_id} got access to commands without registration')
         return
-
+    # Обрабатываем голосовые
     if message.content_type == 'voice':
 
         file_id = message.voice.file_id  # получаем id голосового сообщения
         file_info = bot.get_file(file_id)  # получаем информацию о голосовом сообщении
         file = bot.download_file(file_info.file_path)  # скачиваем голосовое сообщение
-
+        # Сначала мы пытаемся расшифровать голосовое с помощью английского расшифровщика
         status, output = stt(user_id, file, message.voice.duration, 'english')
 
         if status == 'SUCCESS':
@@ -302,8 +329,10 @@ def chatting(message: Message):
         elif status in ['LIMIT', 'IEM_ERROR', 'STT_ERROR']:
             bot.send_message(user_id, output)
             return
-
+        # Если у нас не получилось расшифровать голосовое с помощью английского расшифровщика, то это либо пользователь
+        # начал говорить по русски и расшифровщик его не понял, либо пользователь ничего не сказал, либо сказал невнятно
         if not text:
+            # Мы пытаемся расшифровать голосовое русским расшифровщиком
             status, output = stt(user_id, file, message.voice.duration, 'russian')
 
             if status == 'SUCCESS':
@@ -312,10 +341,11 @@ def chatting(message: Message):
             elif status in ['LIMIT', 'IEM_ERROR', 'STT_ERROR']:
                 bot.send_message(user_id, output)
                 return
-
+        # Если и русский расшифровщик ничего не понял, то мы выдаем сообщение пользователю
         if not text:
             bot.send_message(user_id, 'Не удалось распознать речь. Учтите, что бот понимает только английский и русский.')
             return
+    # Это если пользователь воспользовался не голосовым вводом, а текстовым.
     else:
         text = message.text
 
@@ -332,9 +362,9 @@ def chatting(message: Message):
         bot.send_message(user_id, gpt_text)
         return
 
-    #return
     status, output = tts(user_id, gpt_text)
     markup = menu_keyboard(['✍ Перевести на русский'])
+
     if status == 'SUCCESS':
         update_tts_tokens_in_limits(user_id, len(gpt_text))
 
@@ -345,7 +375,6 @@ def chatting(message: Message):
     elif status in ['LIMITS', 'IEM_ERROR', 'TTS_ERROR']:
         bot.send_message(user_id, gpt_text)
         bot.send_message(user_id, output, reply_markup=markup)
-
 
 
 if __name__ == '__main__':

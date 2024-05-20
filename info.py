@@ -1,3 +1,4 @@
+# Темы для инициализации общения с пользователем в режиме dialog
 topics = [
 # Technology
 "What do you think about the impact of social media on society?",

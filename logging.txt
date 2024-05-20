@@ -1,2 +1,2 @@
-2024-05-20 15:47:19,602 - root - INFO - Tables are created
-2024-05-20 15:47:21,023 - root - INFO - New user_id 719301881 just connected
+2024-05-20 17:09:42,548 - root - INFO - Tables are created
+2024-05-20 17:09:43,496 - root - INFO - New user_id 719301881 just connected
