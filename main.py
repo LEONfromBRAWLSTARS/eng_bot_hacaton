@@ -7,7 +7,8 @@ from database import (create_table_tests, add_user_to_tests_table, get_tests_inf
                               insert_row_into_limits, update_tts_tokens_in_limits, insert_row_into_prompts,
                               update_stt_blocks_in_limits, update_gpt_tokens_in_limits, get_last_session,
                               update_session_id, get_start_dialog, get_theme_dialog, update_start_dialog, update_theme_dialog,
-                              update_message_translation, get_last_message_and_translation)
+                              update_message_translation, get_last_message_and_translation, 
+                              create_table_words, add_word, get_words, is_word_in_table, change_trans_in_db)
 import logging
 from math import ceil
 from keyboards import menu_keyboard, inline_menu_keyboard
@@ -16,23 +17,80 @@ from utils import get_markdownv2_text
 from dialog_pipeline import stt, ttt, tts
 import random
 import json
-from vocab import get_info_of_word
+from vocab import get_info_of_word, get_translation
 bot = TeleBot(token=BOT_TOKEN)
-
-
-@bot.message_handler(commands=['vocab'])
-def vocab(message: Message):
-    user_id = message.from_user.id
-    bot.send_message(user_id, 'введите слово для его перевода')
-    bot.register_next_step_handler(message=message, callback=translate)
 
 
 def translate(message: Message):
     user_id = message.from_user.id
-    definition, example, audio = get_info_of_word(message.text)
-    bot.send_message(user_id, definition)
-    bot.send_message(user_id, example)
-    bot.send_voice(user_id, audio)
+
+    translation, error = get_translation(message.text)
+    definition, example, audio, error = get_info_of_word(message.text)
+    resp = f'📌 Слово {message.text} 📌\n'
+    if error != None or (translation == None and definition == None and example == None and audio == None):
+        bot.send_message(user_id, 'Не удалось ничего найти в словаре по этому слову(')
+        return None
+
+    if translation:
+        trans = ", ".join(translation)
+        resp += f'<b>Meaning</b>: {trans}\n'
+
+    if definition != None:
+        resp += f'<b>Definition</b>: {definition}\n'
+
+    if example != None:
+        resp += f'<b>Example</b>: {example}\n'
+    bot.send_message(user_id, resp, parse_mode='HTML')
+
+    if audio != None:
+        bot.send_voice(user_id, audio)
+    
+    return translation
+
+
+def add_new_word(user_id, word, translation):
+    if is_word_in_table(user_id, word):
+        bot.send_message(user_id, "Это слово уже есть в списке")
+    else:
+        add_word(user_id, word, translation, False)
+        bot.send_message(user_id, "Слово добавлено в список")
+
+def words_handler(message):
+    user_id = message.chat.id
+    if message.content_type != 'text':
+        bot.send_message(user_id, "Нужно ввести слово")
+        bot.register_next_step_handler(message, words_handler)
+        
+    translation = translate(message)
+    markup = inline_menu_keyboard([['Изменить перевод', 'change_trans']], rows = 1)
+    if translation != None:
+        translation = ", ".join(translation)
+        add_new_word(user_id, message.text.lower(), translation)
+        bot.send_message(user_id, f"Если вы хотите изменить перевод, то можете сделать это нажав кнопку внизу.", reply_markup=markup)
+    else:
+        bot.send_message(user_id, "Но можете добавить перевод сами", reply_markup=markup)
+
+
+def trans_handler(message):
+    user_id = message.chat.id
+    if message.content_type != 'text':
+        bot.send_message(user_id, "Нужно ввести слово и его перевод")
+        bot.register_next_step_handler(message, words_handler)
+    parts = message.text.split("-", 1)
+    if len(parts) == 1:
+        bot.send_message(user_id, "Не получилось добавить перевод. В сообщении обязательно должно быть тире.")
+        return
+    word = parts[0].lstrip().rstrip().lower()
+    trans = parts[1].lstrip().rstrip().lower()
+
+    if is_word_in_table(user_id, word):
+        change_trans_in_db(user_id, word, trans)
+    else:
+        add_word(user_id, word, trans)
+    bot.send_message(user_id, f"Для слова {word} установлен такой перевод: {trans}")
+    
+
+
 
 
 @bot.message_handler(commands=['start'])
@@ -57,7 +115,7 @@ def menu(message: Message):
 @bot.message_handler(commands=['menu'])
 def menu(message: Message):
     user_id = message.from_user.id
-    markup = inline_menu_keyboard([['Тесты', 'tests'], ['Диалог', 'dialog'], ['Вокабуляр', 'vocabulary']], rows=3)
+    markup = inline_menu_keyboard([['Тесты', 'tests'], ['Диалог', 'dialog'], ['Вокабуляр', 'vocabulary'], ['Список переведенных слов', 'all_words']], rows=3)
     bot.send_message(user_id, 'Выберите режим для тренировки:', reply_markup=markup)
 
 
@@ -270,6 +328,68 @@ def callback_handler(call: CallbackQuery):
 
         update_session_id(user_id, last_session_id+1)
 
+    elif call.data == 'vocabulary':
+        markup = inline_menu_keyboard([['Перевести слово', 'translate'], ['Пополнить словарный запас', 'random_word'], ['Повторить изученное', 'remind_words'], ['Добавить слово', 'input_word'], ['Изменить перевод', 'change_trans']], rows=1)
+        bot.send_message(user_id, "Изучай и повторяй английские слова!", reply_markup=markup) 
+
+    elif call.data == 'translate':
+        bot.send_message(user_id, 'Введите слово для его перевода:')
+        bot.register_next_step_handler(message=call.message, callback=translate)
+
+    elif call.data == 'random_word':
+        word = "essential"#как-то получаю слово
+        translation, error = get_translation(word)
+
+        bot.send_message(user_id, f'Can you translate this word: {word}?')
+        text = get_markdownv2_text(', '.join(translation))
+        bot.send_message(user_id, f'Right answer: """||{text}||"""', parse_mode='MarkdownV2')
+        markup = inline_menu_keyboard([['Добавить слово', 'input_word']], rows = 1)
+        bot.send_message(user_id, 'Если твой ответ правильный, то ты, конечно же, СУПЕР ГУД, а если нет, то можешь добавить его в слова для запоминания', reply_markup=markup)
+
+    elif call.data == 'input_word':
+        bot.send_message(user_id, "Отправьте следующем сообщением слово, которое хотите добавить в словарь")
+        bot.register_next_step_handler(call.message, words_handler)
+
+    elif call.data == 'change_trans':
+        bot.send_message(user_id, "Отправьте следующем сообщением слово и черех тире его варианты перевода(через запятую, еслии их несколько), например: cup - чашка, стакан")
+        bot.register_next_step_handler(call.message, trans_handler)
+
+    elif call.data == "remind_words":
+        know, dont_know = get_words(user_id)
+        word = random.choice(list(know.keys()) + list(dont_know.keys()))
+        if bot in know:
+            translation = know[word]
+        else:
+            translation = dont_know[word]
+
+        bot.send_message(user_id, f'Can you translate this word: {word}?')
+        bot.send_message(user_id, f'Right answer: """||{translation}||"""', parse_mode='MarkdownV2')
+        
+
+    elif call.data == 'all_words':
+        know, dont_know = get_words(user_id)
+        cnt_unknown = 1
+        unknown = ""
+        resp = "<b>Новые слова</b>: \n"
+        for pair in dont_know.items():
+            unknown += f"{cnt_unknown}. {pair[0]}: {pair[1]}\n"
+            cnt_unknown += 1
+    
+        if dont_know  == {}:
+            resp += "Вы еще не переводили новые слова. \n"
+        else:
+            resp += unknown
+
+        resp += "\n <b>Слова, которые уже знаешь</b>: \n"
+        if know == {}:
+            resp += "Вы еще не отметили выученным никакие слова"
+        else:
+            know = ', '.join(know.keys())
+            resp += know
+        
+        bot.send_message(user_id, resp, parse_mode='HTML')
+
+
 
 # Сюда отправляется весь текст и голосовые сообщения
 @bot.message_handler(content_types=['voice', 'text'])
@@ -391,6 +511,7 @@ if __name__ == '__main__':
     create_table_tests()
     create_table_limits()
     create_table_prompts()
+    create_table_words()
     logging.info('Tables are created')
 
     # Создаем меню в телеграмме

@@ -4,6 +4,7 @@ DB_DAME = 'database.db'
 
 TESTS_TABLE = 'tests'
 PROMPTS_TABLE = 'prompts'
+WORDS_TABLE = 'words'
 
 LIMITS_TABLE = 'limits'
 
@@ -318,11 +319,58 @@ def get_last_message_and_translation(user_id):
     return result[0]
 
 
+def create_table_words():
+    query = f'''
+    CREATE TABLE IF NOT EXISTS {WORDS_TABLE}
+    (id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    word TEXT, 
+    translation TEXT, 
+    know BOOL);
+    '''
+    execute_query(query)
+
+def get_words(user_id):
+    query = f'''
+    SELECT word, translation, know FROM {WORDS_TABLE}
+    WHERE user_id = {user_id};
+    '''
+    result = execute_query(query)
+    know = {}
+    dont_know = {}
+    for word in result:
+        if not word[2]:
+            dont_know[word[0]] =  word[1]
+        else:
+            know[word[0]] = word[1]
+    return know, dont_know
+
+
+def add_word(user_id, word, translation = "", know = False):
+
+    query = f'''
+    INSERT INTO {WORDS_TABLE}
+    (user_id, word, translation, know)
+    VALUES (?, ?, ?, ?);
+    '''
+    execute_query(query, (user_id, word, translation, know))
+
+
+def is_word_in_table(user_id, word):
+    query = f'''
+        SELECT EXISTS(SELECT 1 FROM {WORDS_TABLE} WHERE user_id = {user_id} AND word = '{word}');
+        '''
+    result = execute_query(query)
+    return result[0][0]
+
+def change_trans_in_db(user_id, word, trans):
+    query = f'''
+    UPDATE {WORDS_TABLE}
+    SET translation = '{trans}'
+    WHERE user_id = {user_id} AND word = '{word}';
+    '''
+    execute_query(query)
+
 # Это все для тестов. В продакшн это не идет
-con = sqlite3.connect(DB_DAME)
-cur = con.cursor()
-cur.execute('DROP TABLE IF EXISTS prompts;')
-cur.execute('DROP TABLE IF EXISTS limits;')
-cur.execute('DROP TABLE IF EXISTS tests;')
-con.commit()
-con.close()
+q = "DROP TABLE words;"
+

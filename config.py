@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 
-from os import getenv
+from os import getenv, putenv
 
 import time
 
@@ -8,9 +8,10 @@ load_dotenv()
 
 BOT_TOKEN = getenv('BOT_TOKEN')
 FOLDER_ID = getenv('FOLDER_ID')
-IEM_TOKEN_INFO = {'IEM_TOKEN': 't1.9euelZqVi8jOzpONi8mPm5STi8uUx-3rnpWax5KYnJ2JjcqQk5ydmsyXz83l8_dTflJN-e90F3oz_N3z9xMtUE3573QXejP8zef1656VmsuTy5GXm5OPi5HKkpzJipWY7_zF656VmsuTy5GXm5OPi5HKkpzJipWYveuelZqJnJCRjo_JjpjPio2XmszOj7XehpzRnJCSj4qLmtGLmdKckJKPioua0pKai56bnoue0oye.RLCQmxeXyRdamaVJPvsit1vEQSypBgm0mLiBuuGHVWI5-DtRSkTHyq47ffnrjXSO0rdjU2NpDPakXVpvEYkWCA',
+IEM_TOKEN_INFO = {'IEM_TOKEN': 't1.9euelZqelMaPk5KQyJmbnpCeksuUj-3rnpWalpGYjM2Qxs6WyJOex8aOlJnl8_cBZ05N-e9ee3Im_N3z90EVTE357157cib8zef1656VmpiZkcyQm8qWiZqdz5CaxsrG7_zF656VmpiZkcyQm8qWiZqdz5CaxsrGveuelZqYi5aJi4qLyM-Mm5qWmZedzLXehpzRnJCSj4qLmtGLmdKckJKPioua0pKai56bnoue0oye.9fVAmKG3Db1gbX_Z5DJRjX4Wz7QQbiLFFtlKjedCcB6bzCHgx76-RM8LRmxyg6-FKFOSrTtfxhBwhqjBuCU_CQ',
                   'EXPIRES_IN': time.time() + 40000}
-ADMIN_ID = int(getenv('ADMIN_ID'))
+
+#ADMIN_ID = int(getenv('ADMIN_ID'))
 
 MAX_MODEL_TOKENS = 200
 MAX_USERS = 6
