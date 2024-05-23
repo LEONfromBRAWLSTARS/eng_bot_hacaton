@@ -371,6 +371,13 @@ def change_trans_in_db(user_id, word, trans):
     '''
     execute_query(query)
 
+def change_status(user_id, word):
+    query = f'''
+    UPDATE {WORDS_TABLE}
+    SET know = NOT know
+    WHERE user_id = {user_id} AND word = '{word}';
+    '''
+    execute_query(query)
+
 # Это все для тестов. В продакшн это не идет
 q = "DROP TABLE words;"
-

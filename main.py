@@ -8,7 +8,7 @@ from database import (create_table_tests, add_user_to_tests_table, get_tests_inf
                               update_stt_blocks_in_limits, update_gpt_tokens_in_limits, get_last_session,
                               update_session_id, get_start_dialog, get_theme_dialog, update_start_dialog, update_theme_dialog,
                               update_message_translation, get_last_message_and_translation, 
-                              create_table_words, add_word, get_words, is_word_in_table, change_trans_in_db)
+                              create_table_words, add_word, get_words, is_word_in_table, change_trans_in_db, change_status)
 import logging
 from math import ceil
 from keyboards import menu_keyboard, inline_menu_keyboard
@@ -58,7 +58,8 @@ def add_new_word(user_id, word, translation):
 def words_handler(message):
     user_id = message.chat.id
     if message.content_type != 'text':
-        bot.send_message(user_id, "Нужно ввести слово")
+        markup = inline_menu_keyboard([['Добавить слово', 'input_word']], rows = 1)
+        bot.send_message(user_id, "Нужно ввести слово", reply_markup=markup)
         bot.register_next_step_handler(message, words_handler)
         
     translation = translate(message)
@@ -74,11 +75,13 @@ def words_handler(message):
 def trans_handler(message):
     user_id = message.chat.id
     if message.content_type != 'text':
-        bot.send_message(user_id, "Нужно ввести слово и его перевод")
-        bot.register_next_step_handler(message, words_handler)
+        markup = inline_menu_keyboard([['Изменить перевод', 'change_trans']], rows = 1)
+        bot.send_message(user_id, "Нужно ввести слово и его перевод", reply_markup=markup)
+        return
     parts = message.text.split("-", 1)
     if len(parts) == 1:
-        bot.send_message(user_id, "Не получилось добавить перевод. В сообщении обязательно должно быть тире.")
+        markup = inline_menu_keyboard([['Изменить перевод', 'change_trans']], rows = 1)
+        bot.send_message(user_id, "Не получилось добавить перевод. В сообщении обязательно должно быть тире.", reply_markup=markup)
         return
     word = parts[0].lstrip().rstrip().lower()
     trans = parts[1].lstrip().rstrip().lower()
@@ -88,9 +91,34 @@ def trans_handler(message):
     else:
         add_word(user_id, word, trans)
     bot.send_message(user_id, f"Для слова {word} установлен такой перевод: {trans}")
-    
 
 
+def change_list(message):
+    user_id = message.chat.id
+    if message.content_type != 'text':
+        markup = inline_menu_keyboard([['Изменить списки списки', 'change_list']], rows = 1)
+        bot.send_message(user_id, "Нужно ввести число или числ через запятую")
+        return
+    try:
+        nums = list(map(int, message.text.split(',')))
+    except ValueError:
+        markup = inline_menu_keyboard([['Изменить списки списки', 'change_list']], rows = 1)
+        bot.send_message(user_id, "Нужно ввести число или числ через запятую", reply_markup=markup)
+        return
+    know, dont_know = get_words(user_id)
+    words = list(dont_know.keys()) + list(know.keys())
+    changed = []
+    for num in nums:
+        if 1 <= num <= len(words):
+            change_status(user_id, words[num-1])
+            changed.append(words[num-1])
+    if len(changed) == 0:
+        resp = "Ни у каких слов статус не был изменен"
+    elif len(changed) == 1:
+        resp = f"У слова {changed[0]} был измене статус"
+    else:
+        resp = "У слов "+ ", ".join(changed) + " были изменены статусы"
+    bot.send_message(user_id, resp)
 
 
 @bot.message_handler(commands=['start'])
@@ -356,38 +384,40 @@ def callback_handler(call: CallbackQuery):
 
     elif call.data == "remind_words":
         know, dont_know = get_words(user_id)
-        word = random.choice(list(know.keys()) + list(dont_know.keys()))
-        if bot in know:
-            translation = know[word]
-        else:
-            translation = dont_know[word]
+        word = random.choice(list(dont_know.keys()))
 
         bot.send_message(user_id, f'Can you translate this word: {word}?')
-        bot.send_message(user_id, f'Right answer: """||{translation}||"""', parse_mode='MarkdownV2')
+        bot.send_message(user_id, f'Right answer: """||{dont_know[word]}||"""', parse_mode='MarkdownV2')
         
 
     elif call.data == 'all_words':
         know, dont_know = get_words(user_id)
-        cnt_unknown = 1
-        unknown = ""
+        cnt = 1
         resp = "<b>Новые слова</b>: \n"
-        for pair in dont_know.items():
-            unknown += f"{cnt_unknown}. {pair[0]}: {pair[1]}\n"
-            cnt_unknown += 1
-    
         if dont_know  == {}:
             resp += "Вы еще не переводили новые слова. \n"
         else:
-            resp += unknown
+            for pair in dont_know.items():
+                resp += f"{cnt}. {pair[0]}: {pair[1]}\n"
+                cnt += 1
 
         resp += "\n <b>Слова, которые уже знаешь</b>: \n"
         if know == {}:
             resp += "Вы еще не отметили выученным никакие слова"
         else:
-            know = ', '.join(know.keys())
-            resp += know
+            for pair in know.items():
+                resp += f"{cnt}. {pair[0]}: {pair[1]}\n"
+                cnt += 1
         
         bot.send_message(user_id, resp, parse_mode='HTML')
+        markup = inline_menu_keyboard([['Изменить списки списки', 'change_list']], rows = 1)
+        bot.send_message(user_id, "Если Вы хотите перенести слово в другой список, то нажми кнопку внизу", reply_markup=markup)
+
+    elif call.data == 'change_list':
+        know, dont_know = get_words(user_id)
+        bot.send_message(user_id, "Напиши номер слова или номера слов(через запятую), которое хочешь перенести в другой список, например: 1, 5, 6.")
+        bot.register_next_step_handler(call.message, change_list)
+
 
 
 
