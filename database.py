@@ -4,9 +4,10 @@ DB_DAME = 'database.db'
 
 TESTS_TABLE = 'tests'
 PROMPTS_TABLE = 'prompts'
-
+WORDS_TABLE = 'words'
 LIMITS_TABLE = 'limits'
-
+USER_WORDS_TABLE = 'user_words'
+ALL_USER_WORDS_TABLE = 'all_user_words'
 
 # Функция выполнения запроса к БД.
 def execute_query(query, data=None):
@@ -80,7 +81,6 @@ def add_user_to_tests_table(user_id):
 
 # Добавляем инфу по определенному тесту, на котором сейчас пользователь
 def add_level_info(user_id, level, info):
-    print(user_id, level, info)
     query = f'''
     UPDATE {TESTS_TABLE}
     SET {level} = '{info}'
@@ -318,11 +318,207 @@ def get_last_message_and_translation(user_id):
     return result[0]
 
 
+def create_table_words():
+    query = f'''
+    CREATE TABLE IF NOT EXISTS {WORDS_TABLE}
+    (id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    words_list TEXT DEFAULT '', 
+    learned_words TEXT DEFAULT '');
+    '''
+    execute_query(query)
+
+
+def get_words(user_id):
+    query = f'''
+    SELECT words_list, learned_words FROM {WORDS_TABLE}
+    WHERE user_id = {user_id};
+    '''
+    result = execute_query(query)
+    return result[0][0], str(result[0][1])
+
+
+def add_word(user_id, word):
+    user_words, user_status = get_words(user_id)
+    if user_words == '' or user_words == '0':
+        user_words = word
+        user_status = '0'
+    else:
+        user_words += ', ' + word
+        user_status += '0'
+    query = f'''
+    UPDATE {WORDS_TABLE}
+    SET words_list = '{user_words}', 
+        learned_words = '{user_status}'
+    WHERE user_id = {user_id};
+    '''
+    execute_query(query)
+
+
+def is_user_in_words(user_id):
+    query = f'''
+        SELECT EXISTS(SELECT 1 FROM {WORDS_TABLE} WHERE user_id = {user_id});
+        '''
+    result = execute_query(query)
+
+    return result[0][0]
+
+
+def add_user_to_words_table(user_id):
+    query = f'''
+    INSERT INTO {WORDS_TABLE}
+    (user_id)
+    VALUES(?);
+    '''
+    execute_query(query, (user_id, ))
+
+
+
+
+
+
+def create_table_user_words():
+    query = f'''
+        CREATE TABLE IF NOT EXISTS {USER_WORDS_TABLE}
+        (id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        A1 TEXT DEFAULT 'None, 0, 0, None',
+        A2 TEXT DEFAULT 'None, 0, 0, None',
+        B1 TEXT DEFAULT 'None, 0, 0, None',
+        B2 TEXT DEFAULT 'None, 0, 0, None',
+        C1 TEXT DEFAULT 'None, 0, 0, None',
+        C2 TEXT DEFAULT 'None, 0, 0, None');
+        '''
+
+    execute_query(query)
+
+
+# Проверяем, есть ли пользователь в таблице слов пользователя
+def is_user_in_user_words(user_id):
+    query = f'''
+        SELECT EXISTS(SELECT 1 FROM {USER_WORDS_TABLE} WHERE user_id = {user_id});
+        '''
+    result = execute_query(query)
+
+    return result[0][0]
+
+
+# Извлекаем информацию о словах на определенном уровне
+def get_user_words_info(user_id, level):
+    query = f'''
+    SELECT {level} FROM {USER_WORDS_TABLE}
+    WHERE user_id = {user_id}'''
+    result = execute_query(query)
+    return result[0][0]
+
+
+# Добавляем просто айди пользователя в таблицу слов пользователя. По дефолту там уже стоят значения на уровнях теста
+def add_user_to_user_words(user_id):
+    query = f'''
+    INSERT INTO {USER_WORDS_TABLE}
+    (user_id)
+    VALUES(?);
+    '''
+    execute_query(query, (user_id, ))
+
+
+# Добавляем инфу по определенной категории слов(А1, А2..), на котором сейчас пользователь
+def add_level_user_words_info(user_id, level, info):
+    query = f'''
+    UPDATE {USER_WORDS_TABLE}
+    SET {level} = '{info}'
+    WHERE user_id = {user_id};
+    '''
+    execute_query(query)
+
+# Вся инфа о словах пользователя
+def create_table_all_words():
+    query = f'''
+    CREATE TABLE IF NOT EXISTS {ALL_USER_WORDS_TABLE}
+    (id INTEGER PRIMARY KEY,
+     user_id INTEGER,
+     user_location TEXT DEFAULT 'None',
+     learned_words TEXT DEFAULT '',
+     words_to_learn TEXT DEFAULT '',
+     user_words TEXT DEFAULT '',
+     translation TEXT DEFAULT '',
+     time TEXT DEFAULT '',
+     bound_for_repeating_words DEFAULT '');
+     '''
+    execute_query(query)
+
+
+def is_user_in_all_words_table(user_id):
+    query = f'''
+            SELECT EXISTS(SELECT 1 FROM {ALL_USER_WORDS_TABLE} WHERE user_id = {user_id});
+            '''
+    result = execute_query(query)
+
+    return result[0][0]
+
+
+def add_user_to_all_words_table(user_id):
+    query = f'''
+        INSERT INTO {ALL_USER_WORDS_TABLE}
+        (user_id)
+        VALUES(?);
+        '''
+    execute_query(query, (user_id,))
+
+
+def get_info_all_words(user_id, column):
+    query = f'''
+    SELECT {column} FROM {ALL_USER_WORDS_TABLE}
+    WHERE user_id = {user_id};
+    '''
+    result = execute_query(query)
+    return result[0][0]
+
+
+def add_info_all_words(user_id, column, word):
+    query = f'''
+    UPDATE {ALL_USER_WORDS_TABLE}
+    SET {column} = {column} || '{word}~'
+    WHERE user_id = {user_id}
+    '''
+    execute_query(query)
+
+
+def update_location_all_words(user_id, location):
+    query = f'''
+    UPDATE {ALL_USER_WORDS_TABLE}
+    SET user_location = '{location}'
+    WHERE user_id = {user_id}
+    '''
+    execute_query(query)
+
+
+def add_bound_for_repeating_words(user_id, word):
+    query = f'''
+    UPDATE {ALL_USER_WORDS_TABLE}
+    SET bound_for_repeating_words = '{word}'
+    WHERE user_id = {user_id}
+    '''
+    execute_query(query)
+
+
+def update_info_all_words(user_id, column, info):
+    query = f'''
+        UPDATE {ALL_USER_WORDS_TABLE}
+        SET {column} = '{info}'
+        WHERE user_id = {user_id}
+        '''
+    execute_query(query)
+
+
 # Это все для тестов. В продакшн это не идет
 con = sqlite3.connect(DB_DAME)
 cur = con.cursor()
 cur.execute('DROP TABLE IF EXISTS prompts;')
 cur.execute('DROP TABLE IF EXISTS limits;')
 cur.execute('DROP TABLE IF EXISTS tests;')
+cur.execute('DROP TABLE IF EXISTS words;')
+cur.execute('DROP TABLE IF EXISTS user_words;')
+cur.execute('DROP TABLE IF EXISTS all_user_words;')
 con.commit()
 con.close()

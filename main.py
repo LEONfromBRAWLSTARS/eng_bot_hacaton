@@ -4,19 +4,23 @@ from config import BOT_TOKEN, SYSTEM_PROMPT, SYSTEM_PROMPT_TRANSLATION
 
 from validation import (is_user_amount_limit, is_gpt_tokens_limit_per_message)
 from database import (create_table_tests, add_user_to_tests_table, get_tests_info, is_user_in_tests, add_level_info, create_table_prompts, create_table_limits, user_in_table,
-                              insert_row_into_limits, update_tts_tokens_in_limits, insert_row_into_prompts,
-                              update_stt_blocks_in_limits, update_gpt_tokens_in_limits, get_last_session,
-                              update_session_id, get_start_dialog, get_theme_dialog, update_start_dialog, update_theme_dialog,
-                              update_message_translation, get_last_message_and_translation)
+                      insert_row_into_limits, update_tts_tokens_in_limits, insert_row_into_prompts,
+                      update_stt_blocks_in_limits, update_gpt_tokens_in_limits, get_last_session,
+                      update_session_id, get_start_dialog, get_theme_dialog, update_start_dialog, update_theme_dialog,
+                      update_message_translation, get_last_message_and_translation, is_user_in_words, get_words, add_word, add_user_to_words_table, create_table_words,
+                      create_table_user_words, is_user_in_user_words, get_user_words_info, add_user_to_user_words, add_level_user_words_info,
+                      create_table_all_words, is_user_in_all_words_table, add_user_to_all_words_table, get_info_all_words, add_info_all_words, update_location_all_words, add_bound_for_repeating_words, update_info_all_words)
 import logging
 from math import ceil
 from keyboards import menu_keyboard, inline_menu_keyboard
 from info import topics
-from utils import get_markdownv2_text
+from utils import get_markdownv2_text, get_word, deque_manipulation, deleting_tildas
 from dialog_pipeline import stt, ttt, tts
 import random
 import json
-from vocab import get_info_of_word
+from vocab import get_info_of_word, get_translation
+from vocab_func import translate
+import time
 bot = TeleBot(token=BOT_TOKEN)
 
 
@@ -27,18 +31,92 @@ def vocab(message: Message):
     bot.register_next_step_handler(message=message, callback=translate)
 
 
-def translate(message: Message):
+def translate(message: Message, state='show_word'):
+
+    #if not is_user_in_words(user_id):
+        #add_user_to_words_table(user_id)
+
+    translation, error = get_translation(message)
+    definition, example, audio, error = get_info_of_word(message)
+    resp = ''
+    if state=='show_word':
+        resp = f'📌 Слово {message} 📌\n'
+    if error != None or (translation == None and definition == None and example == None and audio == None):
+
+        return False, False
+
+    #add_word(user_id, message)
+    #print(get_words(user_id))
+
+    if translation:
+        trans = ", ".join(translation)
+        resp += f'*Meaning*: {trans}\n'
+
+    if definition:
+        resp += f'*Definition*: {definition}\n'
+
+    if example:
+        resp += f'*Example*: {example}\n'
+
+    if audio:
+        return resp, audio
+    return resp, False
+
+
+# Сюда отправляется пользователь, когда он хочет добавить свое слово в словарь для повторения.
+def translate_user_message(message: Message):
     user_id = message.from_user.id
-    definition, example, audio = get_info_of_word(message.text)
-    bot.send_message(user_id, definition)
-    bot.send_message(user_id, example)
-    bot.send_voice(user_id, audio)
+    # Так как мы храним слова пользователя в виде строки, отделенные друг от друга ~, то мы должны прописать исключение
+    user_word = deleting_tildas(message.text)
+    if not user_word:
+        bot.send_message(user_id, 'Введите фразу или слово')
+        return
+    # Если пользователь вводит что-то слишком большое
+    if len(user_word) > 100:
+        markup = inline_menu_keyboard([['Выход', 'exit_adding_word']], rows=1)
+        bot.send_message(user_id, 'Слишком большое выражение, введите поменьше', reply_markup=markup)
+        bot.register_next_step_handler(message, callback=translate_user_message)
+        return
+
+    text, audio = translate(user_word)
+    update_info_all_words(user_id, 'user_words', user_word)
+    # Если нет слова
+    if not text:
+        update_location_all_words(user_id, 'adding_translation')
+        bot.send_message(user_id, 'Не получилось перевести ваше слово или фразу, добавьте свой перевод')
+        bot.register_next_step_handler(message, callback=user_translation)
+        return
+    # Если получилось перевести слово или фразу, то даем возможность написать свой перевод или же оставить из словаря
+    markup = inline_menu_keyboard([['Оставить перевод', 'leave_api_translation'],
+                                   ['Добавить свой перевод', 'adding_own_translation']], rows=2)
+    bot.send_message(user_id, text, reply_markup=markup)
+
+
+# Здесь пользователь оказывается, когда он вводит свой перевод слова или выражения
+def user_translation(message: Message):
+    user_id = message.from_user.id
+    # Избавляемся от тильд
+    user_word = deleting_tildas(message.text)
+    if not user_word:
+        bot.send_message(user_id, 'Введите перевод')
+        return
+    update_location_all_words(user_id, 'None')
+    # Если слишком длинный перевод слова или фразы
+    if len(user_word) > 150:
+        bot.send_message(user_id, 'Слишком длинный перевод, введите покороче')
+        bot.register_next_step_handler(message, callback=user_translation)
+    # Добавляем слово и его перевод
+    add_info_all_words(user_id, 'translation', user_word)
+    # в "user_word" мы записываем слова, которые пользователь сам пожелал добавить(изначальная функция - буффер для
+    # пользовательского ввода для того, чтобы избежать всевозможных баггов.
+    word = get_info_all_words(user_id, 'user_words').split('~')[-1]
+    add_info_all_words(user_id, 'words_to_learn', word)
+    bot.send_message(user_id, 'Новое слово добавлено')
 
 
 @bot.message_handler(commands=['start'])
 def start(message: Message):
     user_id = message.from_user.id
-
     # Проверяем, есть ли пользователь в нашей таблице лимитов токенов, если нет - добавляем.
     if not user_in_table(user_id):
         insert_row_into_limits(user_id)
@@ -212,6 +290,216 @@ def callback_handler(call: CallbackQuery):
         bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id,
                               text=(f'{level}. Вопрос {int(num_of_question) + 1}/{amount_of_questions}\n\n'
                                     f'{question}'), reply_markup=markup)
+
+    # Я искренне прошу прощения перед всеми, кто решит заглянуть в следующие 150-200 строк кода.
+    # Начинается ветвь вокабуляра
+    elif call.data == 'vocabulary':
+        markup = inline_menu_keyboard([['Учить слова и выражения', 'learn_new_words'],
+                                       ['Добавить свои слова', 'add_new_words'],
+                                       ['Повторить изученные', 'repeat_words'],
+                                       ['Вывести изученные слова', 'all_words']], rows=2)
+        bot.send_message(user_id, 'Опции представлены ниже', reply_markup=markup)
+    # Пользователь нажимает "учить новые слова" из json файла
+    elif call.data == 'learn_new_words':
+        markup = inline_menu_keyboard([['A1', 'A1_words'], ['A2', 'A2_words'], ['B1', 'B1_words'],
+                                       ['B2', 'B2_words'], ['C1', 'C1_words'], ['C2', 'C2_words']], rows=2)
+        bot.send_message(user_id, 'Выберите уровень, слова которого вы хотите изучить', reply_markup=markup)
+    # Пользователь выбирает уровень слов
+    elif call.data in ['A1_words', 'A2_words', 'B1_words', 'B2_words', 'C1_words', 'C2_words']:
+        if call.data in ['B1_words', 'B2_words', 'C1_words', 'C2_words']:
+            bot.send_message(user_id, 'temporary not available')
+            return
+        if not is_user_in_user_words(user_id):
+            add_user_to_user_words(user_id)
+        level = call.data[:2]
+        # Извлекаем всю необходимую информацию о пользователе на этом этапе
+        status, num_of_word, amount_of_learned, *message_id = get_user_words_info(user_id, level).split(', ')
+        # Если пользователь уже начал учить слова, но потом еще раз нажал эту кнопку, то мы просто удаляем старый блок
+        # сообщения, чтобы избежать всевозможных ошибок
+        if status == 'Start':
+            bot.delete_messages(chat_id=user_id, message_ids=message_id)
+        # Извлекаем слово, которое надо показать пользователю
+        word_to_show = words_dict[level][int(num_of_word)]
+        # Обращаемя к АПИ для перевода, описания, произношения слова
+        text, audio = translate(word_to_show)
+        markup = inline_menu_keyboard([['Знаю', f'{level}_known_word'], ['Не знаю', f'{level}_unknown_word'],
+                                       ['Выход', f'{level}_exit']], rows=2)
+        text = get_markdownv2_text(text)
+        # Если мы получили перевод и произношение
+        if text and audio:
+            message1 = bot.send_message(user_id, text, reply_markup=markup, parse_mode='MarkdownV2')
+            message2 = bot.send_voice(user_id, audio)
+            add_level_user_words_info(user_id, level, f'Start, {num_of_word}, {amount_of_learned}, {message1.message_id}, {message2.message_id}')
+        # Если мы получили только перевод
+        elif text:
+            message = bot.send_message(user_id, text, reply_markup=markup, parse_mode='MarkdownV2')
+            add_level_user_words_info(user_id, level, f'Start, {num_of_word}, {amount_of_learned}, {message.message_id}')
+        # Если мы не получили ни перевода, ни произношения
+        else:
+            bot.send_message(user_id, 'Возникла ошибка')
+            return
+
+    elif call.data in ['A1_known_word', 'A1_unknown_word', 'A2_known_word', 'A2_unknown_word',
+                       'B1_known_word', 'B1_unknown_word', 'B2_known_word', 'B2_unknown_word',
+                       'C1_known_word', 'C1_unknown_word', 'C2_known_word', 'C2_unknown_word',
+                       'A1_exit', 'A2_exit', 'B1_exit', 'B2_exit', 'C1_exit', 'C2_exit']:
+        if not is_user_in_all_words_table(user_id):
+            add_user_to_all_words_table(user_id)
+        # Извлекаем вот таким вот варварским способом уровень, значение и слово
+        level = call.data[:2]
+        state = call.data[3:]
+        word = get_word(call.message.text)
+        # Получаем всю необходимую инфу
+        status, num_of_word, amount_of_learned, *message_id = get_user_words_info(user_id, level).split(', ')
+        # Получаем количество слово в уровне
+        amount_of_level_words = len(words_dict[level])
+        # Если количество слов, которые пользователь прошел сравнялось с количеством слов в уровне, то завершаем
+        if num_of_word == amount_of_level_words:
+            bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id, text='Слова закончились в уровне')
+            add_level_user_words_info(user_id, level, f'Finished, {num_of_word}, {amount_of_learned}, {message_id}')
+            return
+        # Если пользователь нажал выход из режима изучения новых слов
+        if state == 'exit':
+            add_level_user_words_info(user_id, level, f'None, {num_of_word}, {amount_of_learned}, None')
+            bot.delete_messages(chat_id=user_id, message_ids=message_id)
+            return
+        # Если пользователь нажал кнопку, что он уже знает это слово
+        elif state == 'known_word':
+            amount_of_learned = int(amount_of_learned) + 1
+            # Добавляем слово в колонку слов, которые он уже знает
+            add_info_all_words(user_id, 'learned_words', word)
+            add_info_all_words(user_id, 'time', time.time())
+        # Если пользователь нажал кнопку, что он не знает этого слова
+        elif state == 'unknown_word':
+            add_info_all_words(user_id, 'words_to_learn', word)
+            add_info_all_words(user_id, 'translation', 'None')
+            add_info_all_words(user_id, 'time', time.time())
+
+        num_of_word = int(num_of_word) + 1
+
+        word_to_show = words_dict[level][int(num_of_word)]
+        text, audio = translate(word_to_show)
+
+        markup = inline_menu_keyboard([['Знаю', f'{level}_known_word'], ['Не знаю', f'{level}_unknown_word'],
+                                       ['Выход', f'{level}_exit']], rows=2)
+        if text and audio:
+            # Тут короче манипуляция с кнопками.
+            if len(message_id) == 2:
+                bot.delete_message(chat_id=user_id, message_id=message_id[1])
+
+            message1 = bot.edit_message_text(chat_id=user_id, message_id=message_id[0], text=text,
+                                             reply_markup=markup, parse_mode='HTML')
+            message2 = bot.send_voice(user_id, audio)
+            add_level_user_words_info(user_id, level, f'Start, {num_of_word}, {amount_of_learned}, {message1.message_id}, {message2.message_id}')
+        elif text:
+            # Тут тоже манипуляция с кнопками
+            if len(message_id) == 2:
+                bot.delete_message(chat_id=user_id, message_id=message_id[1])
+            message1 = bot.edit_message_text(chat_id=user_id, message_id=message_id[0], text=text,
+                                             reply_markup=markup, parse_mode='HTML')
+            add_level_user_words_info(user_id, level, f'Start, {num_of_word}, {amount_of_learned}, {message1.message_id}')
+        else:
+            bot.send_message(user_id, 'Возникла ошибка')
+            return
+    # Режим, если пользователь захочет добавить свои слова
+    elif call.data == 'add_new_words':
+        if not is_user_in_all_words_table(user_id):
+            add_user_to_all_words_table(user_id)
+        user_location = get_info_all_words(user_id, 'user_location')
+        # Обработка ошибок, если пользователь вдруг уже нажимал эту кнопку, ввел слово, но не добавил его перевод.
+        if user_location == 'adding_translation':
+            bot.send_message(user_id, 'Добавьте перевод вашего слова')
+            return
+        # Даем пользователю возможность выйти из режима, если он случайно сюда зашел
+        markup = inline_menu_keyboard([['Выход', 'exit_adding_word']], rows=1)
+        bot.send_message(user_id, 'Отправьте слово для добавления', reply_markup=markup)
+        bot.register_next_step_handler(call.message, callback=translate_user_message)
+    # Если пользователь не захотел добавлять свое слово для изучения
+    elif call.data == 'exit_adding_word':
+        bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        update_location_all_words(user_id, 'None')
+        bot.clear_step_handler_by_chat_id(user_id)
+    # Тут пользователь решает, оставить ли ему перевод, который получился из API, либо же добавить свой перевод
+    elif call.data in ['leave_api_translation', 'adding_own_translation']:
+        # Блокируем кнопки, для избежания ошибок
+        markup = inline_menu_keyboard([['Оставить перевод', 'Null'],
+                                       ['Добавить свой перевод', 'Null']], rows=2)
+        bot.edit_message_reply_markup(chat_id=user_id, message_id=call.message.message_id, reply_markup=markup)
+        # Оставляет перевод API
+        if call.data == 'leave_api_translation':
+            update_location_all_words(user_id, 'None')
+            word = get_info_all_words(user_id, 'user_words').split('~')[-1]
+            add_info_all_words(user_id, 'words_to_learn', word)
+            add_info_all_words(user_id, 'translation', call.message.text)
+            bot.send_message(user_id, 'Перевод добавлен')
+        # Добавляет свой перевод
+        elif call.data == 'adding_own_translation':
+            bot.send_message(user_id, 'Введите перевод')
+            bot.register_next_step_handler(call.message, callback=user_translation)
+    # Если пользователь выбирает повторять слова
+    elif call.data == 'repeat_words':
+        # Если пользователя нет в таблице слов, значит у него нет слов
+        if not is_user_in_all_words_table(user_id):
+            add_user_to_all_words_table(user_id)
+            bot.send_message(user_id, 'У вас еще нет слов для повторения')
+            return
+        # Извлекаем слово
+        word = get_info_all_words(user_id, 'words_to_learn').split('~')[0]
+        if not word:
+            bot.send_message(user_id, 'У вас еще нет слов для повторения')
+            return
+        # Извлекаем перевод, если он есть
+        translation = get_info_all_words(user_id, 'translation').split('~')[0]
+        # Если у нас нет перевода(это слово добавил пользователь,так как для слов пользователя мы сохраняем его перевод,
+        # а для слов из словаря - нет
+        if translation.strip() == 'None':
+            translation, audio = translate(word, state='not_showing_word')
+        translation = get_markdownv2_text(translation)
+        # Это специальный, так скажем, флаг, для того, чтобы определять, когда пользователю нужно закончить повторять
+        # слова из списка слов для повторений. В следующем блоке описано более подробно
+        add_bound_for_repeating_words(user_id, word)
+        # maybe need to clear addition words
+        markup = inline_menu_keyboard([['Еще повторить', 'not_learned_word_yet'],
+                                       ['Теперь знаю это слово', 'learned_word']], rows=2)
+        bot.send_message(user_id, f'{word}\n||{translation}||', reply_markup=markup, parse_mode='MarkdownV2')
+    # Если пользователь еще не выучил слово и хочет в будущем его повторить, или же пользователь выучил его и не надо
+    # это слово больше показывать.
+    elif call.data in ['not_learned_word_yet', 'learned_word']:
+        # Извлекаем все слова для повторения и их переводы
+        words = get_info_all_words(user_id, 'words_to_learn').split('~')[:-1]
+        translations = get_info_all_words(user_id, 'translation').split('~')[:-1]
+        bound_word = get_info_all_words(user_id, 'bound_for_repeating_words')
+        if call.data == 'not_learned_word_yet':
+            # Тут самый прикол начинается, короче, переходите по функции в модуль utils, там описано
+            updated_words = deque_manipulation(words, 'stay')
+            updated_translations = deque_manipulation(translations, 'stay')
+        elif call.data == 'learned_word':
+            updated_words = deque_manipulation(words, 'remove')
+            updated_translations = deque_manipulation(translations, 'remove')
+            add_info_all_words(user_id, 'learned_words', words[0])
+        if updated_words and updated_translations:
+            update_info_all_words(user_id, 'words_to_learn', '~'.join(updated_words)+'~')
+            update_info_all_words(user_id, 'translation', '~'.join(updated_translations)+'~')
+        else:
+            update_info_all_words(user_id, 'words_to_learn', '')
+            update_info_all_words(user_id, 'translation', '')
+        # Условие, если мы повторили все слова, если нарвались на
+        if len(words) < 2 or words[1] == bound_word:
+            bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id, text='Вы повторили все слова')
+            add_info_all_words(user_id, 'bound_for_repeating_words', '')
+            return
+        # Берем следующее слово и перевод.
+        word = words[1]
+        translation = translations[1]
+        # Если нет перевода.
+        if translation.strip() == 'None':
+            translation, audio = translate(word, state='not_showing_word')
+        translation = get_markdownv2_text(translation)
+        markup = inline_menu_keyboard([['Еще повторить', 'not_learned_word_yet'],
+                                       ['Теперь знаю это слово', 'learned_word']], rows=2)
+        bot.edit_message_text(chat_id=user_id, message_id=call.message.message_id,
+                              text=f'{word}\n||{translation}||', reply_markup=markup, parse_mode='MarkdownV2')
+
     # Дальше идет код для кнопочек диалога
     elif call.data == 'dialog':
 
@@ -387,10 +675,15 @@ if __name__ == '__main__':
     with open('tests.json', 'r', encoding='utf-8') as file:
         tests_dict = json.load(file)
 
+    with open('words.json', 'r', encoding='utf-8') as file:
+        words_dict = json.load(file)
     # Создаем три таблицы: одна для тестов, другая - для лимитов токенов и блоков пользователей, еще другая - для промптов.
     create_table_tests()
     create_table_limits()
     create_table_prompts()
+    create_table_words()
+    create_table_user_words()
+    create_table_all_words()
     logging.info('Tables are created')
 
     # Создаем меню в телеграмме
