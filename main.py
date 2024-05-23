@@ -18,6 +18,7 @@ from dialog_pipeline import stt, ttt, tts
 import random
 import json
 from vocab import get_info_of_word, get_translation
+from get_words_from_dict import get_words_from_dict
 bot = TeleBot(token=BOT_TOKEN)
 
 
@@ -365,14 +366,17 @@ def callback_handler(call: CallbackQuery):
         bot.register_next_step_handler(message=call.message, callback=translate)
 
     elif call.data == 'random_word':
-        word = "essential"#как-то получаю слово
-        translation, error = get_translation(word)
-
-        bot.send_message(user_id, f'Can you translate this word: {word}?')
-        text = get_markdownv2_text(', '.join(translation))
-        bot.send_message(user_id, f'Right answer: """||{text}||"""', parse_mode='MarkdownV2')
+        num = random.randint(1, 2000)
+        pair = get_words_from_dict(num)
+        bot.send_message(user_id, f'Do you know this word: {pair[0]}?')
         markup = inline_menu_keyboard([['Добавить слово', 'input_word']], rows = 1)
-        bot.send_message(user_id, 'Если твой ответ правильный, то ты, конечно же, СУПЕР ГУД, а если нет, то можешь добавить его в слова для запоминания', reply_markup=markup)
+        bot.send_message(user_id, f'Right answer: ||{pair[1]}|| \n Если твой ответ правильный, то ты, конечно же, СУПЕР ГУД, а если нет, то можешь добавить его в слова для запоминания', parse_mode='MarkdownV2', reply_markup=markup)
+
+    elif call.data == "remind_words":
+        know, dont_know = get_words(user_id)
+        word = random.choice(list(dont_know.keys()))
+        bot.send_message(user_id, f'Can you translate this word: {word}?')
+        bot.send_message(user_id, f'Right answer: ||{dont_know[word]}||', parse_mode='MarkdownV2')
 
     elif call.data == 'input_word':
         bot.send_message(user_id, "Отправьте следующем сообщением слово, которое хотите добавить в словарь")
@@ -381,15 +385,7 @@ def callback_handler(call: CallbackQuery):
     elif call.data == 'change_trans':
         bot.send_message(user_id, "Отправьте следующем сообщением слово и черех тире его варианты перевода(через запятую, еслии их несколько), например: cup - чашка, стакан")
         bot.register_next_step_handler(call.message, trans_handler)
-
-    elif call.data == "remind_words":
-        know, dont_know = get_words(user_id)
-        word = random.choice(list(dont_know.keys()))
-
-        bot.send_message(user_id, f'Can you translate this word: {word}?')
-        bot.send_message(user_id, f'Right answer: """||{dont_know[word]}||"""', parse_mode='MarkdownV2')
-        
-
+   
     elif call.data == 'all_words':
         know, dont_know = get_words(user_id)
         cnt = 1
@@ -417,6 +413,7 @@ def callback_handler(call: CallbackQuery):
         know, dont_know = get_words(user_id)
         bot.send_message(user_id, "Напиши номер слова или номера слов(через запятую), которое хочешь перенести в другой список, например: 1, 5, 6.")
         bot.register_next_step_handler(call.message, change_list)
+
 
 
 
