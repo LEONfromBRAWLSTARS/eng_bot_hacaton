@@ -9,7 +9,8 @@ from database import (create_table_tests, add_user_to_tests_table, get_tests_inf
                       update_session_id, get_start_dialog, get_theme_dialog, update_start_dialog, update_theme_dialog,
                       update_message_translation, get_last_message_and_translation, is_user_in_words, get_words, add_word, add_user_to_words_table, create_table_words,
                       create_table_user_words, is_user_in_user_words, get_user_words_info, add_user_to_user_words, add_level_user_words_info,
-                      create_table_all_words, is_user_in_all_words_table, add_user_to_all_words_table, get_info_all_words, add_info_all_words, update_location_all_words, add_bound_for_repeating_words, update_info_all_words)
+                      create_table_all_words, is_user_in_all_words_table, add_user_to_all_words_table, get_info_all_words, add_info_all_words, update_location_all_words, add_bound_for_repeating_words, update_info_all_words,
+                      limit_reset_db)
 import logging
 from math import ceil
 from keyboards import menu_keyboard, inline_menu_keyboard
@@ -112,6 +113,11 @@ def user_translation(message: Message):
     word = get_info_all_words(user_id, 'user_words').split('~')[-1]
     add_info_all_words(user_id, 'words_to_learn', word)
     bot.send_message(user_id, 'Новое слово добавлено')
+
+
+@bot.message_handler(commands=['limit_reset'])
+def limit_reset(message: Message):
+    limit_reset_db(message.from_user.id)
 
 
 @bot.message_handler(commands=['start'])
