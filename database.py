@@ -485,6 +485,15 @@ def update_repeat_words_id(user_id, value):
     execute_query(query)
 
 
+def limit_reset_db(user_id):
+    query = f'''
+    UPDATE {LIMITS_TABLE}
+    SET total_gpt_tokens = 0, total_tts_tokens = 0, total_stt_blocks = 0
+    WHERE user_id = {user_id};
+    '''
+    execute_query(query)
+
+    
 # Добавляет границу, где мы закончим повторять слова
 def add_bound_for_repeating_words(user_id, word):
     print(word)
