@@ -140,6 +140,15 @@ def insert_row_into_limits(user_id):
     execute_query(query)
 
 
+def limit_reset_db(user_id):
+    query = f'''
+    UPDATE {LIMITS_TABLE}
+    SET total_gpt_tokens = 0, total_tts_tokens = 0, total_stt_blocks = 0
+    WHERE user_id = {user_id};
+    '''
+    execute_query(query)
+    
+
 # Обновление ттс токенов в таблице лимитов пользователей.
 def update_tts_tokens_in_limits(user_id, value):
     query = f'''
