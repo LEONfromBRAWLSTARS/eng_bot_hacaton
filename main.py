@@ -125,6 +125,8 @@ def personal_stat(message: Message):
 @bot.message_handler(commands=['stop_dialog'])
 def stop_dialog(message: Message):
     user_id = message.from_user.id
+    if not is_user_in_limits(user_id):
+        insert_row_into_limits(user_id)
     if get_start_dialog(user_id) == 'False':
         bot.send_message(user_id, 'Вы еще не начали диалог 🔒')
     else:
@@ -684,6 +686,8 @@ def callback_handler(call: CallbackQuery):
 
     # Дальше идет код для кнопочек диалога
     elif call.data == 'dialog':
+        if not is_user_in_limits(user_id):
+            insert_row_into_limits(user_id)
         if get_start_dialog(user_id) == 'True':
             bot.send_message(user_id, 'Вы уже начали диалог, если хотите его завершить, то введите /stop_dialog')
             return
