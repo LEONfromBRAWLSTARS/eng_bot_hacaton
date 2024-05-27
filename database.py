@@ -534,13 +534,13 @@ def get_all_user_info(user_id):
 
 
 # Это все для тестов. В продакшн это не идет
-con = sqlite3.connect(DB_DAME)
-cur = con.cursor()
-cur.execute('DROP TABLE IF EXISTS prompts;')
-cur.execute('DROP TABLE IF EXISTS limits;')
-cur.execute('DROP TABLE IF EXISTS tests;')
-cur.execute('DROP TABLE IF EXISTS words;')
-cur.execute('DROP TABLE IF EXISTS user_words;')
-cur.execute('DROP TABLE IF EXISTS all_user_words;')
-con.commit()
-con.close()
+#con = sqlite3.connect(DB_DAME)
+#cur = con.cursor()
+#cur.execute('DROP TABLE IF EXISTS prompts;')
+#cur.execute('DROP TABLE IF EXISTS limits;')
+#cur.execute('DROP TABLE IF EXISTS tests;')
+#cur.execute('DROP TABLE IF EXISTS words;')
+#cur.execute('DROP TABLE IF EXISTS user_words;')
+#cur.execute('DROP TABLE IF EXISTS all_user_words;')
+#con.commit()
+#con.close()
