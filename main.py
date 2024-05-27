@@ -114,6 +114,13 @@ def menu(message: Message):
     bot.send_message(user_id, 'Выберите режим для тренировки:', reply_markup=markup)
 
 
+@bot.message_handler(commands=['limit_reset'])
+def limit_reset(message: Message):
+    if not is_user_in_limits(user_id):
+        insert_row_into_limits(user_id)
+    limit_reset_db(message.from_user.id)
+
+
 @bot.message_handler(commands=['personal_stat'])
 def personal_stat(message: Message):
     user_id = message.from_user.id
