@@ -15,7 +15,7 @@ def gpt_tokenizer(user_prompt, sys_prompt):
             "role": 'user',
             "text": user_prompt
         })
-
+    
     if sys_prompt:
         data['messages'].append(
             {
@@ -23,9 +23,12 @@ def gpt_tokenizer(user_prompt, sys_prompt):
                 "text": sys_prompt
             }
         )
-
+    headers = {
+        'Authorization': f'Bearer {IEM_TOKEN_INFO["IEM_TOKEN"]}',
+        'Content-Type': 'application/json'
+    }
     try:
-        return True, len(requests.post(url=TOKENIZER.url, headers=TOKENIZER.headers, json=data).json()['tokens'])
+        return True, len(requests.post(url=TOKENIZER.url, headers=headers, json=data).json()['tokens'])
     except Exception as e:
         logging.error(f'Error occured in gpt tokenizer')
         return False, None
@@ -38,8 +41,10 @@ def gpt(user_prompt, sys_prompt=None):
 
     for i in user_prompt:
         data['messages'].append(i)
-
-    response = requests.post(url=GPT.url, headers=GPT.headers, json=data)
+    headers = {
+        'Authorization': f'Bearer {IEM_TOKEN_INFO["IEM_TOKEN"]}',
+        'Content-Type': 'application/json'}
+    response = requests.post(url=GPT.url, headers=headers, json=data)
     if response.status_code < 200 or response.status_code >= 300:
         return False, f'Error code {response.status_code}'
     try:
