@@ -6,8 +6,8 @@ from config import TTS, STT_ENG, STT_RU
 def text_to_speech(text):
     data = TTS.data.copy()
     data['text'] = text
-
-    response = requests.post(url=TTS.url, headers=TTS.headers, data=data)
+    headers = {'Authorization': f'Bearer {IEM_TOKEN_INFO["IEM_TOKEN"]}'}
+    response = requests.post(url=TTS.url, headers=headers, data=data)
 
     # Проверяем, не произошла ли ошибка при запросе
     if response.status_code == 200:
@@ -17,10 +17,11 @@ def text_to_speech(text):
 
 
 def speech_to_text(text, language):
+    headers = {'Authorization': f'Bearer {IEM_TOKEN_INFO["IEM_TOKEN"]}'}
     if language == 'english':
-        response = requests.post(url=STT_ENG.url, headers=STT_ENG.headers, data=text)
+        response = requests.post(url=STT_ENG.url, headers=headers, data=text)
     elif language == 'russian':
-        response = requests.post(url=STT_RU.url, headers=STT_RU.headers, data=text)
+        response = requests.post(url=STT_RU.url, headers=headers, data=text)
 
     decoded_data = response.json()
 
